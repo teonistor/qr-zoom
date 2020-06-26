@@ -11,12 +11,13 @@ import java.awt.*;
 import java.awt.datatransfer.*;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.Iterator;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static java.util.stream.Collectors.toList;
 
 public class Main {
 
@@ -35,18 +36,22 @@ public class Main {
         }
     };
 
-    static final Pattern URL_INPUT = Pattern.compile("(?:https://|http://|)(.+\\.)?zoom\\.us/(?:my|j)/(.+)");
+//    static final Pattern URL_INPUT = Pattern.compile("(?:https://|http://|)(.+\\.)?zoom\\.us/(?:my|j)/(.+)");
 
     static final Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
 
 
     public static void main(String[] arg) {
-        final List<ConfigEntry> entries = new Yaml().loadAs(ClassLoader.getSystemResourceAsStream("config.yml"), Config.class).entries;
+        final Config config = new Yaml().loadAs(ClassLoader.getSystemResourceAsStream("config.yml"), Config.class);
+
+        final Pattern webUrl = Pattern.compile(config.webUrlRegex);
+        final Iterator<ConfigEntry> entries = config.entries.iterator();
+
         clipboard.setContents(NIL_TRANSFERABLE, null);
-        launchScreenshotTool(null, entries.iterator());
+        launchScreenshotTool(null, entries, webUrl, config.nativeUrlFormat);
     }
 
-    static void launchScreenshotTool(final Throwable prevCause, final Iterator<ConfigEntry> entries) {
+    static void launchScreenshotTool(final Throwable prevCause, final Iterator<ConfigEntry> entries, Pattern webUrl, String nativeUrlFormat) {
         if (!entries.hasNext()) {
             prevCause.printStackTrace();
             return;
@@ -54,16 +59,16 @@ public class Main {
 
         try {
             final ConfigEntry entry = entries.next();
-            waitForToolAndDecode(new ProcessBuilder(entry.tool).start(), entry);
+            waitForToolAndDecode(new ProcessBuilder(entry.tool).start(), webUrl, nativeUrlFormat);
         } catch (final IOException e) {
             if (prevCause != null && prevCause != e) {
                 e.addSuppressed(prevCause);
             }
-            launchScreenshotTool(e, entries);
+            launchScreenshotTool(e, entries, webUrl, nativeUrlFormat);
         }
     }
 
-    static void waitForToolAndDecode(final Process process, final ConfigEntry entry) {
+    static void waitForToolAndDecode(final Process process, Pattern webUrl, String nativeUrlFormat) {
         try {
             process.waitFor();
 
@@ -79,12 +84,11 @@ public class Main {
                     final BinaryBitmap bitmap = new BinaryBitmap(new HybridBinarizer(new BufferedImageLuminanceSource((BufferedImage) transferData1)));
                     final String text = new MultiFormatReader().decode(bitmap).getText();
 
-                    final Matcher match = URL_INPUT.matcher(text);
+                    final Matcher match = webUrl.matcher(text);
                     if (match.find()) {
-                        // This is terrible
-                        final List<String> launchCommand = entry.command.stream().map(part -> URL_INPUT.matcher(match.group()).replaceAll(part)).collect(toList());
-                        System.out.println("Read: " + text + ". Launching: " + launchCommand);
-                        new ProcessBuilder(launchCommand).start();
+                        final String nativeUrl = webUrl.matcher(match.group()).replaceAll(nativeUrlFormat);
+                        System.out.printf("Read '%s'. Launching '%s'%n", text, nativeUrl);
+                        Desktop.getDesktop().browse(new URI(nativeUrl));
 
                     } else {
                         System.err.println("Didn't understand the text: " + text);
@@ -95,16 +99,18 @@ public class Main {
             } else {
                 System.err.println("No image data");
             }
-        } catch (final IOException|UnsupportedFlavorException|InterruptedException|NotFoundException e) {
+        } catch (final IOException|UnsupportedFlavorException|InterruptedException|NotFoundException|URISyntaxException e) {
             e.printStackTrace();
         }
     }
 
     static class Config {
+        public String webUrlRegex;
+        public String nativeUrlFormat;
         public List<ConfigEntry> entries;
     }
 
     static class ConfigEntry {
-        public List<String> tool, command;
+        public List<String> tool;
     }
 }
