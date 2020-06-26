@@ -5,13 +5,18 @@ import com.google.zxing.MultiFormatReader;
 import com.google.zxing.NotFoundException;
 import com.google.zxing.client.j2se.BufferedImageLuminanceSource;
 import com.google.zxing.common.HybridBinarizer;
+import org.yaml.snakeyaml.Yaml;
+
 import java.awt.*;
 import java.awt.datatransfer.*;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
-import java.util.Arrays;
+import java.util.Iterator;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import static java.util.stream.Collectors.toList;
 
 public class Main {
 
@@ -30,41 +35,35 @@ public class Main {
         }
     };
 
-    static final String[][] SCREENSHOT_TOOLS = {
-            {"gnome-screenshot", "-iac"},
-            {"snippingtool.exe"}};
-
     static final Pattern URL_INPUT = Pattern.compile("(?:https://|http://|)(.+\\.)?zoom\\.us/(?:my|j)/(.+)");
 
-    static final String[][] LAUNCH_COMMANDS = {
-            // These correspond to the tools above, in order
-            {"xdg-open", "zoommtg://$1zoom.us/join?action=join&confno=$2"},
-            {"start",    "zoommtg://$1zoom.us/join?action=join&confno=$2"}};
+    static final Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
 
 
     public static void main(String[] arg) {
-        final Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+        final List<ConfigEntry> entries = new Yaml().loadAs(ClassLoader.getSystemResourceAsStream("config.yml"), Config.class).entries;
         clipboard.setContents(NIL_TRANSFERABLE, null);
-
-        launchScreenshotTool(0, null, clipboard);
+        launchScreenshotTool(null, entries.iterator());
     }
 
-    static void launchScreenshotTool(final int index, final Throwable prevCause, final Clipboard clipboard) {
-        if (index >= SCREENSHOT_TOOLS.length) {
+    static void launchScreenshotTool(final Throwable prevCause, final Iterator<ConfigEntry> entries) {
+        if (!entries.hasNext()) {
             prevCause.printStackTrace();
+            return;
         }
 
         try {
-            waitForToolAndDecode(index, new ProcessBuilder(SCREENSHOT_TOOLS[index]).start(), clipboard);
+            final ConfigEntry entry = entries.next();
+            waitForToolAndDecode(new ProcessBuilder(entry.tool).start(), entry);
         } catch (final IOException e) {
             if (prevCause != null && prevCause != e) {
                 e.addSuppressed(prevCause);
             }
-            launchScreenshotTool(index + 1, e, clipboard);
+            launchScreenshotTool(e, entries);
         }
     }
 
-    static void waitForToolAndDecode(final int index, final Process process, final Clipboard clipboard) {
+    static void waitForToolAndDecode(final Process process, final ConfigEntry entry) {
         try {
             process.waitFor();
 
@@ -82,9 +81,9 @@ public class Main {
 
                     final Matcher match = URL_INPUT.matcher(text);
                     if (match.find()) {
-                        final String[] launchCommand = LAUNCH_COMMANDS[index];
-                        Arrays.setAll(launchCommand, i -> URL_INPUT.matcher(match.group()).replaceAll(launchCommand[i]));
-                        System.out.println("Read: " + text + ". Launching: " + Arrays.toString(launchCommand));
+                        // This is terrible
+                        final List<String> launchCommand = entry.command.stream().map(part -> URL_INPUT.matcher(match.group()).replaceAll(part)).collect(toList());
+                        System.out.println("Read: " + text + ". Launching: " + launchCommand);
                         new ProcessBuilder(launchCommand).start();
 
                     } else {
@@ -99,5 +98,13 @@ public class Main {
         } catch (final IOException|UnsupportedFlavorException|InterruptedException|NotFoundException e) {
             e.printStackTrace();
         }
+    }
+
+    static class Config {
+        public List<ConfigEntry> entries;
+    }
+
+    static class ConfigEntry {
+        public List<String> tool, command;
     }
 }

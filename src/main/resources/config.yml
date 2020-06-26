@@ -1,0 +1,5 @@
+entries:
+- tool:    ["gnome-screenshot", "-iac"]
+  command: ["xdg-open", "zoommtg://$1zoom.us/join?action=join&confno=$2"]
+- tool:    ["snippingtool.exe"]
+  command: ["start.exe",    "zoommtg://$1zoom.us/join?action=join&confno=$2"]
