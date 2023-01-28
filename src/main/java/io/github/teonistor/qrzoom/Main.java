@@ -27,11 +27,11 @@ public class Main {
             return new DataFlavor[0];
         }
 
-        public boolean isDataFlavorSupported(DataFlavor flavor) {
+        public boolean isDataFlavorSupported(final DataFlavor flavor) {
             return false;
         }
 
-        public Object getTransferData(DataFlavor flavor) throws UnsupportedFlavorException {
+        public Object getTransferData(final DataFlavor flavor) throws UnsupportedFlavorException {
             throw new UnsupportedFlavorException(flavor);
         }
     };
@@ -41,7 +41,7 @@ public class Main {
     static final Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
 
 
-    public static void main(String[] arg) {
+    public static void main(final String[] arg) {
         final Config config = new Yaml().loadAs(ClassLoader.getSystemResourceAsStream("config.yml"), Config.class);
 
         final Pattern webUrl = Pattern.compile(config.webUrlRegex);
@@ -51,7 +51,7 @@ public class Main {
         launchScreenshotTool(null, entries, webUrl, config.nativeUrlFormat);
     }
 
-    static void launchScreenshotTool(final Throwable prevCause, final Iterator<ConfigEntry> entries, Pattern webUrl, String nativeUrlFormat) {
+    static void launchScreenshotTool(final Throwable prevCause, final Iterator<ConfigEntry> entries, final Pattern webUrl, final String nativeUrlFormat) {
         if (!entries.hasNext()) {
             prevCause.printStackTrace();
             return;
@@ -68,7 +68,7 @@ public class Main {
         }
     }
 
-    static void waitForToolAndDecode(final Process process, Pattern webUrl, String nativeUrlFormat) {
+    static void waitForToolAndDecode(final Process process, final Pattern webUrl, final String nativeUrlFormat) {
         try {
             process.waitFor();
 
